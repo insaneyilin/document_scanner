@@ -22,6 +22,7 @@ and use filemenu to open an image.
 
 ## Dependencies
 
+- Python 2.7x
 - Tkinter
 - OpenCV
 - Pillow
