@@ -1,190 +1,143 @@
 # -*- coding: utf-8 -*-
-# @Author: yilin
+# @Author: insaneyilin
 # Python version: 2.7
-# reference: https://github.com/lancebeet/imagemicro
 
 import os
 import sys
 import math
 import argparse
-
-from PIL import Image
-from PIL import ImageTk
-import Tkinter
-import tkFileDialog
 import numpy as np
 import cv2
 
 
-class SDIImageWindow(object):
-    def __init__(self, master, image_filename=None):
-        self.master = master
-        self.origin_image = Image.new('RGB', (640,480), (255, 255, 255))
-        self.image = Image.new('RGB', (640,480), (255, 255, 255))
-        self.cv_image = None
-        self.file_dir = ""
-        self.filename = ""
-        self.init_window_size()
-        self.init_menubar()
+def find_corners_by_approx_contour(input_image):
+    corners = []
+    image = input_image.copy()
+    # convert to grayscale and detect edges
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
+    edged_image = cv2.Canny(gray_image, 50, 100)
+    # cv2.imshow("edged", edged_image)
+    # find contours
+    cntrs, _ = cv2.findContours(edged_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    cntrs = sorted(cntrs, key = cv2.contourArea, reverse=True)[:5]
+    # loop over the contours, find approx with 4 points
+    for c in cntrs:
+        # approximate the contour
+        peri = cv2.arcLength(c, True)
+        approx = cv2.approxPolyDP(c, 0.02*peri, True)
+        if len(approx) == 4:
+            corners = approx
+            break
 
-        # for select doc corners
-        self.enable_select_corner = False
-        self.selected_corner_idx = -1
-        self.drawed_lines = [None]*4
-
-        self.image_tmp = ImageTk.PhotoImage(self.image)
-
-        # init four corners of the document
-        self.paint = Tkinter.Canvas(self.master,
-                width=self.master.winfo_screenwidth(),
-                height=self.master.winfo_screenheight(),
-                bd=0, highlightthickness=0)
-        self.image_on_canvas = self.paint.create_image(0, 0, anchor=Tkinter.NW,
-                image=self.image_tmp)
-        self.paint.bind('<Motion>', self.on_mouse_move)
-        self.paint.pack()
-        self.paint_ovals = [
-                self.paint.create_oval(0, 0, 0, 0, outline="#f11", fill="#1f1"),
-                self.paint.create_oval(0, 0, 0, 0, outline="#f11", fill="#1f1"),
-                self.paint.create_oval(0, 0, 0, 0, outline="#f11", fill="#1f1"),
-                self.paint.create_oval(0, 0, 0, 0, outline="#f11", fill="#1f1")]
-
-        self.master.bind("<ButtonPress-1>", self.on_left_click)
-
-        if image_filename is not None:
-            self.open_file(image_filename)
+    return corners
 
 
-    def init_window_size(self):
-        self._geom='1080x720+0+0'
-        pad = 0
-        self.master.geometry("{0}x{0}+0+0".format(
-            self.master.winfo_screenwidth() - pad,
-            self.master.winfo_screenheight() - pad))
-        self.master.resizable(False, False)  # disable resizing
-        # self.master.bind('<Escape>', self.toggle_geom)
+def find_corners_by_hough_line_detect(input_image):
+    corners = []
+    return corners
 
 
-    def init_menubar(self):
-        menubar = Tkinter.Menu(self.master)
-        file_menu = Tkinter.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Open", command=self.open_file)
-        file_menu.add_command(label="Save as", command=self.save_file)
-        file_menu.add_command(label="Quit", command=self.master.destroy)
-        menubar.add_cascade(label="File", menu=file_menu)
-
-        filter_menu = Tkinter.Menu(menubar, tearoff=0)
-        filter_menu.add_command(label="Find Edges", command=self.edge_detect)
-        filter_menu.add_command(label="Restore Image", command=self.restore_image)
-        menubar.add_cascade(label="Filter", menu=filter_menu)
-
-        self.master.config(menu=menubar)
+def get_document_corners(input_image):
+    corners = find_corners_by_approx_contour(input_image)
+    return [[pt[0][0], pt[0][1]] for pt in corners]
 
 
-    def open_file(self, filename=None):
-        if filename is None:
-            filename = tkFileDialog.askopenfilename(parent=self.master,title='Choose files')
-        if type(filename) is tuple or filename == "":
-            return
-        self.image = Image.open(filename).convert("RGB")
-        self.origin_image = self.image.copy()
-        print("filename: {}".format(filename))
-        print("image size: [{} {}]".format(self.image.size[0], self.image.size[1]))
-
-        self.file_dir, self.filename = os.path.split(filename)
-        pad = 10
-        image_w = self.image.size[0]
-        image_h = self.image.size[1]
-        self.doc_corners = [[pad, pad],
-                [pad, image_h - pad],
-                [image_w - pad, image_h - pad],
-                [image_w - pad, pad]]
-        self.update()
+def get_mass_center(points):
+    x, y = 0, 0
+    for pt in points:
+        x += pt[0]
+        y += pt[1]
+    x /= float(len(points))
+    y /= float(len(points))
+    return x, y
 
 
-    def save_file(self):
-        filename = tkFileDialog.asksaveasfilename()
-        if type(filename) is tuple or filename == "":
-            return
-        self.image.save(filename)
+def sort_rect_points(points):
+    mass_center = get_mass_center(points)
+    top_pts = []
+    bottom_pts = []
+    for pt in points:
+        if pt[1] < mass_center[1]:
+            top_pts.append(pt)
+        else:
+            bottom_pts.append(pt)
+
+    if len(top_pts) > 2:
+        idx = np.argmax(top_pts, axis=0)[1]
+        bottom_pts.append(top_pts[idx])
+        top_pts.pop(idx)
+    if len(bottom_pts) > 2:
+        idx = np.argmin(bottom_pts, axis=0)[1]
+        top_pts.append(bottom_pts[idx])
+        bottom_pts.pop(idx)
+
+    tl = top_pts[0] if top_pts[0][0] < top_pts[1][0] else top_pts[1]
+    tr = top_pts[1] if top_pts[0][0] < top_pts[1][0] else top_pts[0]
+    bl = bottom_pts[0] if bottom_pts[0][0] < bottom_pts[1][0] else bottom_pts[1]
+    br = bottom_pts[1] if bottom_pts[0][0] < bottom_pts[1][0] else bottom_pts[0]
+
+    return tl, tr, br, bl
 
 
-    def update(self):
-        self.master.geometry('{}x{}'.format(self.image.size[0], self.image.size[1]))
+def apply_four_point_perspective_transform(input_image, points):
+    (tl, tr, br, bl) = sort_rect_points(points)
 
-        self.image_tmp = ImageTk.PhotoImage(self.image)
-        self.paint.itemconfig(self.image_on_canvas, image=self.image_tmp)
+    # compute the width of the new image, which will be the
+    # maximum distance between bottom-right and bottom-left
+    # x-coordinates or the top-right and top-left coordinates
+    width_1 = math.hypot(br[0]-bl[0], br[1]-bl[1])
+    width_2 = math.hypot(tr[0]-tl[0], tr[1]-tl[1])
+    max_width = max(int(width_1), int(width_2))
 
-        for oval, corner in zip(self.paint_ovals, self.doc_corners):
-            x, y = corner[0], corner[1]
-            self.paint.coords(oval, x-5, y-5, x+5, y+5)
-        for idx, corner in enumerate(self.doc_corners):
-            next_idx = (idx+1) % len(self.doc_corners)
-            next_corner = self.doc_corners[next_idx]
-            if self.drawed_lines[idx] is not None:
-                self.paint.delete(self.drawed_lines[idx])
-            self.drawed_lines[idx] = self.paint.create_line(corner[0], corner[1],
-                    next_corner[0], next_corner[1],
-                    dash=(4, 2), fill="#05f")
+    # compute the height of the new image, which will be the
+    # maximum distance between top-right and bottom-right
+    # y coordinates or the top-left and bottom-left y coordinates
+    height_1 = math.hypot(tr[0]-br[0], tr[1]-br[1])
+    height_2 = math.hypot(tl[0]-bl[0], tl[1]-bl[1])
+    max_height = max(int(height_1), int(height_2))
 
-        self.master.wm_title(self.filename)
+    # now that we have dimensions of the new image, construct
+    # the set of destination points to obtain a "birds eye view",
+    # (i.e. top-down view) of the image, again specifying points
+    # in the top-left, top-right, bottom-right, bottom-left order
+    dst = np.array([
+                   [0, 0],
+                   [max_width-1, 0],
+                   [max_width-1, max_height-1],
+                   [0, max_height-1]], dtype="float32")
 
-
-    def edge_detect(self):
-        self.cv_image = cv2.cvtColor(np.asarray(self.image), cv2.COLOR_RGB2BGR)
-        gray = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2GRAY)
-        edged = cv2.Canny(gray, 50, 100)
-        self.cv_image = cv2.cvtColor(edged, cv2.COLOR_GRAY2RGB)
-        self.image = Image.fromarray(self.cv_image)
-        self.update()
-
-
-    def restore_image(self):
-        self.image = self.origin_image.copy()
-        self.update()
-
-
-    def toggle_geom(self, event):
-        geom = self.master.winfo_geometry()
-        self.master.geometry(self._geom)
-        self._geom=geom
-
-
-    def on_mouse_move(self, event):
-        self.move_corner_event(event.x, event.y)
-
-
-    def on_left_click(self, event):
-        # print("({}, {}) clicked".format(event.x, event.y))
-        if self.enable_select_corner:
-            self.enable_select_corner = False
-            self.selected_corner_idx = -1
-            return
-        x, y = event.x, event.y
-        for idx, corner in enumerate(self.doc_corners):
-            if math.hypot(x-corner[0], y-corner[1]) < 10:
-                self.selected_corner_idx = idx
-                self.enable_select_corner = True
-                break
-
-
-    def move_corner_event(self, x, y):
-        if self.enable_select_corner:
-            self.doc_corners[self.selected_corner_idx] = [x, y]
-            self.update()
+    # compute the perspective transform matrix and then apply it
+    rect_pts = np.array([
+            [tl[0], tl[1]],
+            [tr[0], tr[1]],
+            [br[0], br[1]],
+            [bl[0], bl[1]]], dtype="float32")
+    persp_trans_mat = cv2.getPerspectiveTransform(rect_pts, dst)
+    warped_image = cv2.warpPerspective(input_image, persp_trans_mat, (max_width,max_height))
+    # return the warped image
+    return warped_image
 
 
 def get_args():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('input_image', type=str, help='image filename to open',
+    arg_parser.add_argument('input_image', type=str, help='input image filename',
             default=None)
     return arg_parser.parse_args()
 
 
 if __name__ == '__main__':
     args = get_args()
-    image_filename = args.input_image
+    image = cv2.imread(args.input_image)
+    corners = np.array(get_document_corners(image))
+    cv2.imshow("input_image", image)
+    if len(corners) > 3:
+        contour_image = image.copy()
+        cv2.drawContours(contour_image, [corners], -1, (0, 255, 0), 2)
+        cv2.imshow("contour", contour_image)
+    if len(corners) == 4:
+        warped_image = apply_four_point_perspective_transform(image, corners)
+        cv2.imshow("warped_image", warped_image)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
-    root = Tkinter.Tk()
-    image_window = SDIImageWindow(root, image_filename)
-    root.mainloop()
