@@ -213,14 +213,14 @@ class DocScannerWindow(object):
 
 def get_args():
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument('input_image', type=str, help='input image filename',
+    arg_parser.add_argument('--image', type=str, help='input image filename',
             default=None)
     return arg_parser.parse_args()
 
 
 if __name__ == '__main__':
     args = get_args()
-    image_filename = args.input_image
+    image_filename = args.image
 
     root = Tkinter.Tk()
     doc_scan_window = DocScannerWindow(root, image_filename)
