@@ -6,13 +6,13 @@ A simple document scanner using Python with a GUI.
 
 ## Usage
 
-```python
+```
 python doc_scanner_app.py --image=<input_image_path>
 ```
 
 or
 
-```python
+```
 python doc_scanner_app.py
 ```
 
