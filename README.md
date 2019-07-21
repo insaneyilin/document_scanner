@@ -44,8 +44,8 @@ https://github.com/lancebeet/imagemicro
 
 ### select corners manually
 
-![](https://github.com/insaneyilin/document_scanner/blob/master/screenshots/select_corners.gif?raw=true)
+![](https://github.com/insaneyilin/document_scanner/blob/master/screenshots/select_corners.gif)
 
 ### auto detection (not very robust)
 
-![](https://github.com/insaneyilin/document_scanner/blob/master/screenshots/auto_detect.gif?raw=true)
+![](https://github.com/insaneyilin/document_scanner/blob/master/screenshots/auto_detect.gif)
