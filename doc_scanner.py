@@ -17,7 +17,8 @@ def find_corners_by_approx_contour(input_image):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray_image = cv2.GaussianBlur(gray_image, (5, 5), 0)
     edged_image = cv2.Canny(gray_image, 50, 100)
-    # cv2.imshow("edged", edged_image)
+    cv2.imshow("edged", edged_image)
+    cv2.waitKey(0)
     # find contours
     cntrs, _ = cv2.findContours(edged_image.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     cntrs = sorted(cntrs, key = cv2.contourArea, reverse=True)[:5]

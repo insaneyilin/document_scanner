@@ -83,6 +83,7 @@ class DocScannerWindow(object):
 
         filter_menu = Tkinter.Menu(menubar, tearoff=0)
         filter_menu.add_command(label="Find Edges", command=self.edge_detect)
+        filter_menu.add_command(label="Image Binarization", command=self.image_binarization)
         filter_menu.add_command(label="Restore Image", command=self.restore_image)
         menubar.add_cascade(label="Filter", menu=filter_menu)
 
@@ -158,6 +159,15 @@ class DocScannerWindow(object):
         gray = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2GRAY)
         edged = cv2.Canny(gray, 50, 100)
         self.cv_image = cv2.cvtColor(edged, cv2.COLOR_GRAY2RGB)
+        self.image = Image.fromarray(self.cv_image)
+        self.update()
+
+
+    def image_binarization(self):
+        self.cv_image = cv2.cvtColor(np.asarray(self.image), cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2GRAY)
+        ret, bin_img = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        self.cv_image = cv2.cvtColor(bin_img, cv2.COLOR_GRAY2RGB)
         self.image = Image.fromarray(self.cv_image)
         self.update()
 
